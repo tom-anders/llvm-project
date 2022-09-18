@@ -118,6 +118,7 @@ static_library("clangd") {
     "SemanticHighlighting.cpp",
     "SemanticSelection.cpp",
     "SourceCode.cpp",
+    "SymbolDocumentation.cpp"
     "TUScheduler.cpp",
     "TidyProvider.cpp",
     "URI.cpp",

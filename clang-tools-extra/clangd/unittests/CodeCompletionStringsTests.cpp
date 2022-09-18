@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeCompletionStrings.h"
+#include "SymbolDocumentationMatchers.h"
 #include "TestTU.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "gmock/gmock.h"
@@ -63,6 +64,90 @@ TEST_F(CompletionStringTest, GetDeclCommentBadUTF8) {
   auto AST = TU.build();
   EXPECT_EQ("x\xef\xbf\xbdy",
             getDeclComment(AST.getASTContext(), findDecl(AST, "X")));
+}
+
+TEST_F(CompletionStringTest, DoxygenParsing) {
+  struct {
+    const char *const Code;
+    const std::function<void(SymbolDocumentationOwned &)> ExpectedBuilder;
+  } Cases[] = {
+      {R"cpp(
+    // Hello world
+    void foo();
+    )cpp",
+       [](SymbolDocumentationOwned &Doc) { Doc.Description = "Hello world"; }},
+      {R"cpp(
+    /*! 
+     * \brief brief
+     * \details details
+     */
+    void foo();
+    )cpp",
+       [](SymbolDocumentationOwned &Doc) {
+         Doc.Brief = "brief";
+         Doc.Description = "\\details details";
+       }},
+      {R"cpp(
+    /** 
+     * @brief brief
+     * @details details
+     * @see somewhere else
+     */
+    void foo();
+    )cpp",
+       [](SymbolDocumentationOwned &Doc) {
+         Doc.Brief = "brief";
+         Doc.Description = "@details details\n\n@see somewhere else";
+       }},
+      {R"cpp(
+    /*! 
+     * @brief brief
+     * @details details
+     * @param foo foodoc
+     * @throws ball at hoop
+     * @note note1
+     * @warning warning1
+     * @note note2
+     * @warning warning2
+     * @param bar bardoc
+     * @return something
+     */
+    void foo();
+    )cpp",
+       [](SymbolDocumentationOwned &Doc) {
+         Doc.Brief = "brief";
+         Doc.Description = "@details details\n\n@throws ball at hoop";
+         Doc.Parameters = {{"foo", "foodoc"}, {"bar", "bardoc"}};
+         Doc.Warnings = {"warning1", "warning2"};
+         Doc.Notes = {"note1", "note2"};
+         Doc.Returns = "something";
+       }},
+      {R"cpp(
+    /// @brief Here's \b bold \e italic and \p code
+    int foo;
+    )cpp",
+       [](SymbolDocumentationOwned &Doc) {
+         Doc.Brief = "Here's **bold** *italic* and `code`";
+       }}};
+
+  for (const auto &Case : Cases) {
+    SCOPED_TRACE(Case.Code);
+
+    auto TU = TestTU::withCode(Case.Code);
+    auto AST = TU.build();
+    auto &Ctx = AST.getASTContext();
+    const auto &Decl = findDecl(AST, "foo");
+
+    SymbolDocumentationOwned ExpectedDoc;
+    ExpectedDoc.CommentText =
+        getCompletionComment(Ctx, &Decl)
+            ->getFormattedText(Ctx.getSourceManager(), Ctx.getDiagnostics());
+    Case.ExpectedBuilder(ExpectedDoc);
+
+    const RawComment *RC = getCompletionComment(Ctx, &Decl);
+    EXPECT_THAT(RC, testing::NotNull());
+    EXPECT_THAT(parseDoxygenComment(*RC, Ctx, &Decl), matchesDoc(ExpectedDoc));
+  }
 }
 
 TEST_F(CompletionStringTest, MultipleAnnotations) {

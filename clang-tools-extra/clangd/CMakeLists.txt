@@ -97,6 +97,7 @@ add_clang_library(clangDaemon
   SemanticHighlighting.cpp
   SemanticSelection.cpp
   SourceCode.cpp
+  SymbolDocumentation.cpp
   QueryDriverDatabase.cpp
   TidyProvider.cpp
   TUScheduler.cpp
