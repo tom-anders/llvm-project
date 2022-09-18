@@ -425,12 +425,11 @@ struct CodeCompletionBuilder {
         }
       };
       if (C.IndexResult) {
-        SetDoc(C.IndexResult->Documentation);
+        SetDoc(C.IndexResult->Documentation.CommentText);
       } else if (C.SemaResult) {
         const auto DocComment = getDocumentation(*ASTCtx, *C.SemaResult,
-                                                 /*CommentsFromHeaders=*/false)
-                                    .CommentText;
-        SetDoc(formatDocumentation(*SemaCCS, DocComment));
+                                                 /*CommentsFromHeaders=*/false);
+        SetDoc(formatDocumentation(*SemaCCS, DocComment.CommentText));
       }
     }
     if (Completion.Deprecated) {
@@ -986,8 +985,7 @@ public:
           Candidate.getFunction()
               ? getDeclDocumentation(S.getASTContext(),
                                      *Candidate.getFunction())
-                    .CommentText
-              : ""));
+              : SymbolDocumentationOwned{}));
     }
 
     // Sema does not load the docs from the preamble, so we need to fetch extra
@@ -1002,7 +1000,7 @@ public:
       }
       Index->lookup(IndexRequest, [&](const Symbol &S) {
         if (!S.Documentation.empty())
-          FetchedDocs[S.ID] = std::string(S.Documentation);
+          FetchedDocs[S.ID] = std::string(S.Documentation.CommentText);
       });
       vlog("SigHelp: requested docs for {0} symbols from the index, got {1} "
            "symbols with non-empty docs in the response",
@@ -1111,15 +1109,17 @@ private:
 
   // FIXME(ioeric): consider moving CodeCompletionString logic here to
   // CompletionString.h.
-  ScoredSignature processOverloadCandidate(const OverloadCandidate &Candidate,
-                                           const CodeCompletionString &CCS,
-                                           llvm::StringRef DocComment) const {
+  ScoredSignature
+  processOverloadCandidate(const OverloadCandidate &Candidate,
+                           const CodeCompletionString &CCS,
+                           const SymbolDocumentationOwned &DocComment) const {
     SignatureInformation Signature;
     SignatureQualitySignals Signal;
     const char *ReturnType = nullptr;
 
     markup::Document OverloadComment;
-    parseDocumentation(formatDocumentation(CCS, DocComment), OverloadComment);
+    parseDocumentation(formatDocumentation(CCS, DocComment.CommentText),
+                       OverloadComment);
     Signature.documentation = renderDoc(OverloadComment, DocumentationFormat);
     Signal.Kind = Candidate.getKind();
 

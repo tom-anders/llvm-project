@@ -912,17 +912,17 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND, SymbolID ID,
       *ASTCtx, *PP, CodeCompletionContext::CCC_Symbol, *CompletionAllocator,
       *CompletionTUInfo,
       /*IncludeBriefComments*/ false);
-  std::string Documentation =
-      formatDocumentation(*CCS, getDocumentation(Ctx, SymbolCompletion,
-                                                 /*CommentsFromHeaders=*/true)
-                                    .CommentText);
+
+  const SymbolDocumentationOwned Documentation =
+      getDocumentation(Ctx, SymbolCompletion, /*CommentsFromHeaders=*/true);
+
   if (!(S.Flags & Symbol::IndexedForCodeCompletion)) {
     if (Opts.StoreAllDocumentation)
-      S.Documentation = Documentation;
+      S.Documentation = Documentation.toRef();
     Symbols.insert(S);
     return Symbols.find(S.ID);
   }
-  S.Documentation = Documentation;
+  S.Documentation = Documentation.toRef();
   std::string Signature;
   std::string SnippetSuffix;
   getSignature(*CCS, &Signature, &SnippetSuffix);
