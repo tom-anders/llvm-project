@@ -913,8 +913,9 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND, SymbolID ID,
       *CompletionTUInfo,
       /*IncludeBriefComments*/ false);
   std::string Documentation =
-      formatDocumentation(*CCS, getDocComment(Ctx, SymbolCompletion,
-                                              /*CommentsFromHeaders=*/true));
+      formatDocumentation(*CCS, getDocumentation(Ctx, SymbolCompletion,
+                                                 /*CommentsFromHeaders=*/true)
+                                    .CommentText);
   if (!(S.Flags & Symbol::IndexedForCodeCompletion)) {
     if (Opts.StoreAllDocumentation)
       S.Documentation = Documentation;

@@ -333,7 +333,8 @@ void enhanceFromIndex(HoverInfo &Hover, const NamedDecl &ND,
   LookupRequest Req;
   Req.IDs.insert(ID);
   Index->lookup(Req, [&](const Symbol &S) {
-    Hover.Documentation = std::string(S.Documentation);
+    Hover.Documentation =
+        SymbolDocumentationOwned::descriptionOnly(std::string(S.Documentation));
   });
 }
 
@@ -592,10 +593,11 @@ HoverInfo getHoverContents(const NamedDecl *D, const PrintingPolicy &PP,
 
   HI.Name = printName(Ctx, *D);
   const auto *CommentD = getDeclForComment(D);
-  HI.Documentation = getDeclComment(Ctx, *CommentD);
+  HI.Documentation = getDeclDocumentation(Ctx, *CommentD);
   enhanceFromIndex(HI, *CommentD, Index);
   if (HI.Documentation.empty())
-    HI.Documentation = synthesizeDocumentation(D);
+    HI.Documentation =
+        SymbolDocumentationOwned::descriptionOnly(synthesizeDocumentation(D));
 
   HI.Kind = index::getSymbolInfo(D).Kind;
 
@@ -649,7 +651,8 @@ getPredefinedExprHoverContents(const PredefinedExpr &PE, ASTContext &Ctx,
   HoverInfo HI;
   HI.Name = PE.getIdentKindName();
   HI.Kind = index::SymbolKind::Variable;
-  HI.Documentation = "Name of the current function (predefined variable)";
+  HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+      "Name of the current function (predefined variable)");
   if (const StringLiteral *Name = PE.getFunctionName()) {
     HI.Value.emplace();
     llvm::raw_string_ostream OS(*HI.Value);
@@ -769,7 +772,7 @@ HoverInfo getDeducedTypeHoverContents(QualType QT, const syntax::Token &Tok,
 
     if (const auto *D = QT->getAsTagDecl()) {
       const auto *CommentD = getDeclForComment(D);
-      HI.Documentation = getDeclComment(ASTCtx, *CommentD);
+      HI.Documentation = getDeclDocumentation(ASTCtx, *CommentD);
       enhanceFromIndex(HI, *CommentD, Index);
     }
   }
@@ -836,7 +839,8 @@ llvm::Optional<HoverInfo> getHoverContents(const Attr *A, ParsedAST &AST) {
     llvm::raw_string_ostream OS(HI.Definition);
     A->printPretty(OS, AST.getASTContext().getPrintingPolicy());
   }
-  HI.Documentation = Attr::getDocumentation(A->getKind()).str();
+  HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+      Attr::getDocumentation(A->getKind()).str());
   return HI;
 }
 
@@ -1172,6 +1176,10 @@ markup::Document HoverInfo::present() const {
 
   // Put a linebreak after header to increase readability.
   Output.addRuler();
+
+  if (!Documentation.Brief.empty())
+    parseDocumentation(Documentation.Brief, Output);
+
   // Print Types on their own lines to reduce chances of getting line-wrapped by
   // editor, as they might be long.
   if (ReturnType) {
@@ -1180,15 +1188,44 @@ markup::Document HoverInfo::present() const {
     // Parameters:
     // - `bool param1`
     // - `int param2 = 5`
-    Output.addParagraph().appendText("→ ").appendCode(
+    auto &P = Output.addParagraph().appendText("→ ").appendCode(
         llvm::to_string(*ReturnType));
-  }
 
+    if (!Documentation.Returns.empty())
+      P.appendText(": ").appendText(Documentation.Returns);
+  }
   if (Parameters && !Parameters->empty()) {
     Output.addParagraph().appendText("Parameters: ");
     markup::BulletList &L = Output.addBulletList();
-    for (const auto &Param : *Parameters)
-      L.addItem().addParagraph().appendCode(llvm::to_string(Param));
+
+    llvm::SmallVector<ParameterDocumentationOwned> ParamDocs =
+        Documentation.Parameters;
+
+    for (const auto &Param : *Parameters) {
+      auto &Paragraph = L.addItem().addParagraph();
+      Paragraph.appendCode(llvm::to_string(Param));
+
+      if (Param.Name.has_value()) {
+        auto ParamDoc = std::find_if(ParamDocs.begin(), ParamDocs.end(),
+                                     [Param](const auto &ParamDoc) {
+                                       return Param.Name == ParamDoc.Name;
+                                     });
+        if (ParamDoc != ParamDocs.end()) {
+          Paragraph.appendText(": ").appendText(ParamDoc->Description);
+          ParamDocs.erase(ParamDoc);
+        }
+      }
+    }
+
+    // We erased all parameters that matched, but some may still be left,
+    // usually typos. Let's also print them here.
+    for (const auto &ParamDoc : ParamDocs) {
+      L.addItem()
+          .addParagraph()
+          .appendCode(ParamDoc.Name)
+          .appendText(": ")
+          .appendText(ParamDoc.Description);
+    }
   }
 
   // Don't print Type after Parameters or ReturnType as this will just duplicate
@@ -1232,8 +1269,30 @@ markup::Document HoverInfo::present() const {
     Output.addParagraph().appendText(OS.str());
   }
 
-  if (!Documentation.empty())
-    parseDocumentation(Documentation, Output);
+  if (!Documentation.Description.empty())
+    parseDocumentation(Documentation.Description, Output);
+
+  if (!Documentation.Warnings.empty()) {
+    Output.addRuler();
+    Output.addParagraph()
+        .appendText("Warning")
+        .appendText(Documentation.Warnings.size() > 1 ? "s" : "")
+        .appendText(": ");
+    markup::BulletList &L = Output.addBulletList();
+    for (const auto &Warning : Documentation.Warnings)
+      parseDocumentation(Warning, L.addItem());
+  }
+
+  if (!Documentation.Notes.empty()) {
+    Output.addRuler();
+    Output.addParagraph()
+        .appendText("Note")
+        .appendText(Documentation.Notes.size() > 1 ? "s" : "")
+        .appendText(": ");
+    markup::BulletList &L = Output.addBulletList();
+    for (const auto &Note : Documentation.Notes)
+      parseDocumentation(Note, L.addItem());
+  }
 
   if (!Definition.empty()) {
     Output.addRuler();

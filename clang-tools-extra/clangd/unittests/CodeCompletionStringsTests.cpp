@@ -58,12 +58,39 @@ TEST_F(CompletionStringTest, DocumentationWithAnnotation) {
             "Annotation: Ano\n\nIs this brief?");
 }
 
-TEST_F(CompletionStringTest, GetDeclCommentBadUTF8) {
+TEST_F(CompletionStringTest, GetDeclDocumentationBadUTF8) {
   // <ff> is not a valid byte here, should be replaced by encoded <U+FFFD>.
-  auto TU = TestTU::withCode("/*x\xffy*/ struct X;");
+  const std::string Code = llvm::formatv(R"cpp(
+  /// \brief {0}
+  /// \details {0}
+  /// \param {0} {0}
+  /// \warning {0}
+  /// \note {0}
+  /// \return {0}
+  struct X;
+  )cpp",
+                                         "x\xffy");
+
+  auto TU = TestTU::withCode(Code);
   auto AST = TU.build();
-  EXPECT_EQ("x\xef\xbf\xbdy",
-            getDeclComment(AST.getASTContext(), findDecl(AST, "X")));
+
+  const std::string Utf8Replacement = "x\xef\xbf\xbdy";
+  SymbolDocumentationOwned ExpectedDoc;
+  ExpectedDoc.Brief = Utf8Replacement;
+  ExpectedDoc.Returns = Utf8Replacement;
+  ExpectedDoc.Parameters = {{Utf8Replacement, Utf8Replacement}};
+  ExpectedDoc.Notes = {Utf8Replacement};
+  ExpectedDoc.Warnings = {Utf8Replacement};
+  ExpectedDoc.Description = {"\\details " + Utf8Replacement};
+  ExpectedDoc.CommentText = llvm::formatv(R"(\brief {0}
+\details {0}
+\param {0} {0}
+\warning {0}
+\note {0}
+\return {0})", Utf8Replacement);
+
+  EXPECT_THAT(getDeclDocumentation(AST.getASTContext(), findDecl(AST, "X")),
+              matchesDoc(ExpectedDoc));
 }
 
 TEST_F(CompletionStringTest, DoxygenParsing) {
@@ -144,9 +171,7 @@ TEST_F(CompletionStringTest, DoxygenParsing) {
             ->getFormattedText(Ctx.getSourceManager(), Ctx.getDiagnostics());
     Case.ExpectedBuilder(ExpectedDoc);
 
-    const RawComment *RC = getCompletionComment(Ctx, &Decl);
-    EXPECT_THAT(RC, testing::NotNull());
-    EXPECT_THAT(parseDoxygenComment(*RC, Ctx, &Decl), matchesDoc(ExpectedDoc));
+    EXPECT_THAT(getDeclDocumentation(Ctx, Decl), matchesDoc(ExpectedDoc));
   }
 }
 

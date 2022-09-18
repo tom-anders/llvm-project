@@ -427,8 +427,9 @@ struct CodeCompletionBuilder {
       if (C.IndexResult) {
         SetDoc(C.IndexResult->Documentation);
       } else if (C.SemaResult) {
-        const auto DocComment = getDocComment(*ASTCtx, *C.SemaResult,
-                                              /*CommentsFromHeaders=*/false);
+        const auto DocComment = getDocumentation(*ASTCtx, *C.SemaResult,
+                                                 /*CommentsFromHeaders=*/false)
+                                    .CommentText;
         SetDoc(formatDocumentation(*SemaCCS, DocComment));
       }
     }
@@ -983,7 +984,9 @@ public:
       ScoredSignatures.push_back(processOverloadCandidate(
           Candidate, *CCS,
           Candidate.getFunction()
-              ? getDeclComment(S.getASTContext(), *Candidate.getFunction())
+              ? getDeclDocumentation(S.getASTContext(),
+                                     *Candidate.getFunction())
+                    .CommentText
               : ""));
     }
 
