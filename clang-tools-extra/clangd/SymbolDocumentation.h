@@ -62,6 +62,16 @@ public:
 
   bool empty() const { return CommentText.empty(); }
 
+  /// @return The documentation of the parameter with the given \p Name, or
+  /// an empty string if there's no documentation for this parameter
+  String getParamDoc(llvm::StringRef Name) {
+    auto *Doc = llvm::find_if(
+        Parameters, [&Name](const ParameterDocumentation<String> &ParamDoc) {
+          return ParamDoc.Name == Name;
+        });
+    return Doc != Parameters.end() ? Doc->Description : "";
+  }
+
   /// Paragraph of the "brief" command.
   String Brief;
 

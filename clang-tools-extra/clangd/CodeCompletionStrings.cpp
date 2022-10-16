@@ -82,6 +82,14 @@ SymbolDocumentationOwned getDeclDocumentation(const ASTContext &Ctx,
     // the comments for namespaces.
     return {};
   }
+  // For parameters, check if they are documented in their function declaration
+  if (isa<ParmVarDecl>(Decl))
+    if (const auto *FD = dyn_cast<FunctionDecl>(Decl.getDeclContext())) {
+      auto ParamDoc = getDeclDocumentation(Ctx, *FD).getParamDoc(Decl.getName());
+      if (!ParamDoc.empty())
+        return SymbolDocumentationOwned::descriptionOnly(std::move(ParamDoc));
+    }
+
   const RawComment *RC = getCompletionComment(Ctx, &Decl);
   if (!RC)
     return {};

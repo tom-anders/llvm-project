@@ -107,6 +107,9 @@ struct HoverInfo {
   };
   // Set only if CalleeArgInfo is set.
   llvm::Optional<PassType> CallPassType;
+  // Documentation of the parameter that this symbol is passed as.
+  // Set only if CalleeArgInfo is set.
+  llvm::Optional<std::string> CallArgDocs;
 
   /// Produce a user-readable information.
   markup::Document present() const;

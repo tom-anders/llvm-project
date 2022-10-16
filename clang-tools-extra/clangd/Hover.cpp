@@ -926,7 +926,7 @@ void addLayoutInfo(const NamedDecl &ND, HoverInfo &HI) {
 // If N is passed as argument to a function, fill HI.CalleeArgInfo with
 // information about that argument.
 void maybeAddCalleeArgInfo(const SelectionTree::Node *N, HoverInfo &HI,
-                           const PrintingPolicy &PP) {
+                           const PrintingPolicy &PP, const ASTContext &Ctx) {
   const auto &OuterNode = N->outerImplicit();
   if (!OuterNode.Parent)
     return;
@@ -949,8 +949,13 @@ void maybeAddCalleeArgInfo(const SelectionTree::Node *N, HoverInfo &HI,
       continue;
 
     // Extract matching argument from function declaration.
-    if (const ParmVarDecl *PVD = FD->getParamDecl(I))
+    if (const ParmVarDecl *PVD = FD->getParamDecl(I)) {
       HI.CalleeArgInfo.emplace(toHoverInfoParam(PVD, PP));
+
+      SymbolDocumentationOwned ParamDoc = getDeclDocumentation(Ctx, *PVD);
+      if (!ParamDoc.empty())
+        HI.CallArgDocs.emplace(ParamDoc.Description);
+    }
     break;
   }
   if (!HI.CalleeArgInfo)
@@ -1123,7 +1128,7 @@ llvm::Optional<HoverInfo> getHover(ParsedAST &AST, Position Pos,
         // Look for a close enclosing expression to show the value of.
         if (!HI->Value)
           HI->Value = printExprValue(N, AST.getASTContext());
-        maybeAddCalleeArgInfo(N, *HI, PP);
+        maybeAddCalleeArgInfo(N, *HI, PP, AST.getASTContext());
       } else if (const Expr *E = N->ASTNode.get<Expr>()) {
         HI = getHoverContents(E, AST, PP, Index);
       } else if (const Attr *A = N->ASTNode.get<Attr>()) {
@@ -1265,6 +1270,8 @@ markup::Document HoverInfo::present() const {
       OS << "as " << CalleeArgInfo->Name;
     if (CallPassType->Converted && CalleeArgInfo->Type)
       OS << " (converted to " << CalleeArgInfo->Type->Type << ")";
+    if (CallArgDocs)
+      OS << ": " << *CallArgDocs;
     Output.addParagraph().appendText(OS.str());
   }
 
