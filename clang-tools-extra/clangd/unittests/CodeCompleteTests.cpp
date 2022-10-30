@@ -500,6 +500,23 @@ TEST(CompletionTest, Snippets) {
                      snippetSuffix("(${1:int i}, ${2:const float f})")));
 }
 
+TEST(CompletionTest, Bla) {
+  clangd::CodeCompleteOptions Opts;
+  Opts.EnableSnippets = true;
+  auto Results = completions(
+      R"cpp(
+      struct Foo {
+        int bar(int i, float f) {};
+      };
+      int main() {
+        auto p = &Foo::^
+      }
+      )cpp",
+      /*IndexSymbols=*/{}, Opts);
+  EXPECT_THAT(Results.Completions,
+              Contains(AllOf(named("bar"), snippetSuffix(""))));
+}
+
 TEST(CompletionTest, NoSnippetsInUsings) {
   clangd::CodeCompleteOptions Opts;
   Opts.EnableSnippets = true;

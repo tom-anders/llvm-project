@@ -291,7 +291,8 @@ struct ScoredBundleGreater {
 // computed from the first candidate, in the constructor.
 // Others vary per candidate, so add() must be called for remaining candidates.
 struct CodeCompletionBuilder {
-  CodeCompletionBuilder(ASTContext *ASTCtx, const CompletionCandidate &C,
+  CodeCompletionBuilder(ASTContext *ASTCtx, DeclContext *SemaDeclCtx,
+                        const CompletionCandidate &C,
                         CodeCompletionString *SemaCCS,
                         llvm::ArrayRef<std::string> QueryScopes,
                         const IncludeInserter &Includes,
@@ -299,13 +300,15 @@ struct CodeCompletionBuilder {
                         CodeCompletionContext::Kind ContextKind,
                         const CodeCompleteOptions &Opts,
                         bool IsUsingDeclaration, tok::TokenKind NextTokenKind)
-      : ASTCtx(ASTCtx),
+      : ASTCtx(ASTCtx), SemaDeclCtx(SemaDeclCtx),
         EnableFunctionArgSnippets(Opts.EnableFunctionArgSnippets),
-        IsUsingDeclaration(IsUsingDeclaration), NextTokenKind(NextTokenKind) {
+        ContextKind(ContextKind), IsUsingDeclaration(IsUsingDeclaration),
+        NextTokenKind(NextTokenKind) {
     Completion.Deprecated = true; // cleared by any non-deprecated overload.
     add(C, SemaCCS);
     if (C.SemaResult) {
       assert(ASTCtx);
+      assert(SemaDeclCtx);
       Completion.Origin |= SymbolOrigin::AST;
       Completion.Name = std::string(llvm::StringRef(SemaCCS->getTypedText()));
       Completion.FilterText = SemaCCS->getAllTypedText();
@@ -412,6 +415,8 @@ struct CodeCompletionBuilder {
       getSignature(*SemaCCS, &S.Signature, &S.SnippetSuffix,
                    &Completion.RequiredQualifier, IsPattern);
       S.ReturnType = getReturnType(*SemaCCS);
+      clearSnippetForMethodPointerOutsideClassScope(*C.SemaResult,
+                                                    S.SnippetSuffix);
     } else if (C.IndexResult) {
       S.Signature = std::string(C.IndexResult->Signature);
       S.SnippetSuffix = std::string(C.IndexResult->CompletionSnippetSuffix);
@@ -570,11 +575,38 @@ private:
     return "(…)";
   }
 
+  void clearSnippetForMethodPointerOutsideClassScope(
+      const CodeCompletionResult &SemaResult, std::string &SnippetSuffix) {
+    // Heuristic: Don't add snippet suffix (i.e. parenthesis) when completing
+    // a non-static member function (and not via dot/arrow member access) and
+    // we're not inside that class' scope
+    if (SemaResult.Kind == CodeCompletionResult::RK_Declaration &&
+        ContextKind == CodeCompletionContext::Kind::CCC_Symbol) {
+      const auto *CompletedMethod =
+          llvm::dyn_cast<CXXMethodDecl>(SemaResult.getDeclaration());
+      if (CompletedMethod && !CompletedMethod->isStatic()) {
+        for (DeclContext *Ctx = SemaDeclCtx; Ctx; Ctx = Ctx->getParent()) {
+          const auto *CtxMethod = llvm::dyn_cast<CXXMethodDecl>(Ctx);
+          // TODO also check for base class here.
+          // Otherwise Base::foo() will also erase the paranthesis
+          if (CtxMethod &&
+              CtxMethod->getParent() == CompletedMethod->getParent()) {
+            return;
+          }
+        }
+        SnippetSuffix.clear();
+      }
+    }
+  }
+
   // ASTCtx can be nullptr if not run with sema.
   ASTContext *ASTCtx;
+  // SemaDeclCtx can be nullptr if not run with sema.
+  DeclContext *SemaDeclCtx;
   CodeCompletion Completion;
   llvm::SmallVector<BundledEntry, 1> Bundled;
   bool EnableFunctionArgSnippets;
+  CodeCompletionContext::Kind ContextKind;
   // No snippets will be generated for using declarations and when the function
   // arguments are already present.
   bool IsUsingDeclaration;
@@ -1934,7 +1966,8 @@ private:
                           : nullptr;
       if (!Builder)
         Builder.emplace(Recorder ? &Recorder->CCSema->getASTContext() : nullptr,
-                        Item, SemaCCS, QueryScopes, *Inserter, FileName,
+                        Recorder ? Recorder->CCSema->CurContext : nullptr, Item,
+                        SemaCCS, QueryScopes, *Inserter, FileName,
                         CCContextKind, Opts, IsUsingDeclaration, NextTokenKind);
       else
         Builder->add(Item, SemaCCS);
