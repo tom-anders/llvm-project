@@ -98,6 +98,7 @@ add_clang_library(clangDaemon
   SemanticSelection.cpp
   SourceCode.cpp
   SystemIncludeExtractor.cpp
+  SymbolDocumentation.cpp
   TidyProvider.cpp
   TUScheduler.cpp
   URI.cpp
