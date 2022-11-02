@@ -333,8 +333,7 @@ void enhanceFromIndex(HoverInfo &Hover, const NamedDecl &ND,
   LookupRequest Req;
   Req.IDs.insert(ID);
   Index->lookup(Req, [&](const Symbol &S) {
-    Hover.Documentation =
-        SymbolDocumentationOwned::descriptionOnly(std::string(S.Documentation));
+    Hover.Documentation = S.Documentation.toOwned();
   });
 }
 

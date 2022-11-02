@@ -2775,7 +2775,8 @@ TEST(Hover, All) {
 
   // Create a tiny index, so tests above can verify documentation is fetched.
   Symbol IndexSym = func("indexSymbol");
-  IndexSym.Documentation = "comment from index";
+  IndexSym.Documentation =
+      SymbolDocumentationRef::descriptionOnly("comment from index");
   SymbolSlab::Builder Symbols;
   Symbols.insert(IndexSym);
   auto Index =
@@ -2832,7 +2833,8 @@ TEST(Hover, DocsFromIndex) {
   auto AST = TU.build();
   Symbol IndexSym;
   IndexSym.ID = getSymbolID(&findDecl(AST, "X"));
-  IndexSym.Documentation = "comment from index";
+  IndexSym.Documentation =
+      SymbolDocumentationRef::descriptionOnly("comment from index");
   SymbolSlab::Builder Symbols;
   Symbols.insert(IndexSym);
   auto Index =
@@ -2841,9 +2843,7 @@ TEST(Hover, DocsFromIndex) {
   for (const auto &P : T.points()) {
     auto H = getHover(AST, P, format::getLLVMStyle(), Index.get());
     ASSERT_TRUE(H);
-    ASSERT_THAT(H->Documentation,
-                matchesDoc(SymbolDocumentationOwned::descriptionOnly(
-                    std::string(IndexSym.Documentation))));
+    ASSERT_THAT(H->Documentation.toRef(), matchesDoc(IndexSym.Documentation));
   }
 }
 
