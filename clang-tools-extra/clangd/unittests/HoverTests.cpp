@@ -10,6 +10,7 @@
 #include "Annotations.h"
 #include "Config.h"
 #include "Hover.h"
+#include "SymbolDocumentationMatchers.h"
 #include "TestIndex.h"
 #include "TestTU.h"
 #include "index/MemIndex.h"
@@ -43,7 +44,8 @@ TEST(Hover, Structured) {
          HI.NamespaceScope = "";
          HI.Name = "foo";
          HI.Kind = index::SymbolKind::Function;
-         HI.Documentation = "Best foo ever.";
+         HI.Documentation =
+             SymbolDocumentationOwned::descriptionOnly("Best foo ever.");
          HI.Definition = "void foo()";
          HI.ReturnType = "void";
          HI.Type = "void ()";
@@ -60,7 +62,8 @@ TEST(Hover, Structured) {
          HI.NamespaceScope = "ns1::ns2::";
          HI.Name = "foo";
          HI.Kind = index::SymbolKind::Function;
-         HI.Documentation = "Best foo ever.";
+         HI.Documentation =
+             SymbolDocumentationOwned::descriptionOnly("Best foo ever.");
          HI.Definition = "void foo()";
          HI.ReturnType = "void";
          HI.Type = "void ()";
@@ -148,8 +151,8 @@ TEST(Hover, Structured) {
        [](HoverInfo &HI) {
          HI.Name = "__func__";
          HI.Kind = index::SymbolKind::Variable;
-         HI.Documentation =
-             "Name of the current function (predefined variable)";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Name of the current function (predefined variable)");
          HI.Value = "\"foo\"";
          HI.Type = "const char[4]";
        }},
@@ -162,8 +165,8 @@ TEST(Hover, Structured) {
        [](HoverInfo &HI) {
          HI.Name = "__func__";
          HI.Kind = index::SymbolKind::Variable;
-         HI.Documentation =
-             "Name of the current function (predefined variable)";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Name of the current function (predefined variable)");
          HI.Type = "const char[]";
        }},
       // Anon namespace and local scope.
@@ -741,7 +744,8 @@ class Foo final {})cpp";
          HI.Definition = "template <> class Foo<int *>";
          // FIXME: Maybe force instantiation to make use of real template
          // pattern.
-         HI.Documentation = "comment from primary";
+         HI.Documentation =
+             SymbolDocumentationOwned::descriptionOnly("comment from primary");
        }},
       {// Template Type Parameter
        R"cpp(
@@ -793,7 +797,8 @@ class Foo final {})cpp";
          HI.NamespaceScope = "";
          HI.Definition = "float y()";
          HI.LocalScope = "X::";
-         HI.Documentation = "Trivial accessor for `Y`.";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Trivial accessor for `Y`.");
          HI.Type = "float ()";
          HI.ReturnType = "float";
          HI.Parameters.emplace();
@@ -809,7 +814,8 @@ class Foo final {})cpp";
          HI.NamespaceScope = "";
          HI.Definition = "void setY(float v)";
          HI.LocalScope = "X::";
-         HI.Documentation = "Trivial setter for `Y`.";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Trivial setter for `Y`.");
          HI.Type = "void (float)";
          HI.ReturnType = "void";
          HI.Parameters.emplace();
@@ -828,7 +834,8 @@ class Foo final {})cpp";
          HI.NamespaceScope = "";
          HI.Definition = "X &setY(float v)";
          HI.LocalScope = "X::";
-         HI.Documentation = "Trivial setter for `Y`.";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Trivial setter for `Y`.");
          HI.Type = "X &(float)";
          HI.ReturnType = "X &";
          HI.Parameters.emplace();
@@ -848,7 +855,8 @@ class Foo final {})cpp";
          HI.NamespaceScope = "";
          HI.Definition = "void setY(float v)";
          HI.LocalScope = "X::";
-         HI.Documentation = "Trivial setter for `Y`.";
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             "Trivial setter for `Y`.");
          HI.Type = "void (float)";
          HI.ReturnType = "void";
          HI.Parameters.emplace();
@@ -1140,7 +1148,7 @@ class Foo final {})cpp";
     EXPECT_EQ(H->LocalScope, Expected.LocalScope);
     EXPECT_EQ(H->Name, Expected.Name);
     EXPECT_EQ(H->Kind, Expected.Kind);
-    EXPECT_EQ(H->Documentation, Expected.Documentation);
+    ASSERT_THAT(H->Documentation, matchesDoc(Expected.Documentation));
     EXPECT_EQ(H->Definition, Expected.Definition);
     EXPECT_EQ(H->Type, Expected.Type);
     EXPECT_EQ(H->ReturnType, Expected.ReturnType);
@@ -1422,7 +1430,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Type = "void (int)";
             HI.Definition = "void foo(int)";
-            HI.Documentation = "Function definition via pointer";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "Function definition via pointer");
             HI.ReturnType = "void";
             HI.Parameters = {
                 {{"int"}, llvm::None, llvm::None},
@@ -1441,7 +1450,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Type = "int (int)";
             HI.Definition = "int foo(int)";
-            HI.Documentation = "Function declaration via call";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "Function declaration via call");
             HI.ReturnType = "int";
             HI.Parameters = {
                 {{"int"}, llvm::None, llvm::None},
@@ -1589,7 +1599,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Definition = "typedef int Foo";
             HI.Type = "int";
-            HI.Documentation = "Typedef";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("Typedef");
           }},
       {
           R"cpp(// Typedef with embedded definition
@@ -1604,7 +1615,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Definition = "typedef struct Bar Foo";
             HI.Type = "struct Bar";
-            HI.Documentation = "Typedef with embedded definition";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "Typedef with embedded definition");
           }},
       {
           R"cpp(// Namespace
@@ -1651,7 +1663,7 @@ TEST(Hover, All) {
             HI.NamespaceScope = "ns::";
             HI.Type = "void ()";
             HI.Definition = "void foo()";
-            HI.Documentation = "";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly("");
             HI.ReturnType = "void";
             HI.Parameters = std::vector<HoverInfo::Param>{};
           }},
@@ -1719,10 +1731,18 @@ TEST(Hover, All) {
             HI.Kind = index::SymbolKind::Class;
             HI.NamespaceScope = "";
             HI.Definition = "class Foo {}";
-            HI.Documentation = "Forward class declaration";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "Forward class declaration");
           }},
       {
-          R"cpp(// Function declaration
+          R"cpp(
+            /// \brief Function declaration
+            /// \details Some details
+            /// \throws std::runtime_error sometimes
+            /// \param x doc for x
+            /// \warning Watch out!
+            /// \note note1 \note note2
+            /// \return Nothing
             void foo();
             void g() { [[f^oo]](); }
             void foo() {}
@@ -1733,7 +1753,22 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Type = "void ()";
             HI.Definition = "void foo()";
-            HI.Documentation = "Function declaration";
+            HI.Documentation.Brief = "Function declaration";
+            HI.Documentation.Description = "\\details Some details\n\n\\throws "
+                                           "std::runtime_error sometimes";
+            HI.Documentation.Parameters = {
+                {"x", "doc for x"},
+            };
+            HI.Documentation.Returns = "Nothing";
+            HI.Documentation.Notes = {"note1", "note2"};
+            HI.Documentation.Warnings = {"Watch out!"};
+            HI.Documentation.CommentText = R"(\brief Function declaration
+\details Some details
+\throws std::runtime_error sometimes
+\param x doc for x
+\warning Watch out!
+\note note1 \note note2
+\return Nothing)";
             HI.ReturnType = "void";
             HI.Parameters = std::vector<HoverInfo::Param>{};
           }},
@@ -1751,7 +1786,8 @@ TEST(Hover, All) {
             HI.Kind = index::SymbolKind::Enum;
             HI.NamespaceScope = "";
             HI.Definition = "enum Hello {}";
-            HI.Documentation = "Enum declaration";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("Enum declaration");
           }},
       {
           R"cpp(// Enumerator
@@ -1822,7 +1858,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Type = "int";
             HI.Definition = "static int hey = 10";
-            HI.Documentation = "Global variable";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("Global variable");
             // FIXME: Value shouldn't be set in this case
             HI.Value = "10 (0xa)";
           }},
@@ -1874,7 +1911,8 @@ TEST(Hover, All) {
             HI.NamespaceScope = "";
             HI.Type = "int ()";
             HI.Definition = "template <> int foo<int>()";
-            HI.Documentation = "Templated function";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("Templated function");
             HI.ReturnType = "int";
             HI.Parameters = std::vector<HoverInfo::Param>{};
             // FIXME: We should populate template parameters with arguments in
@@ -1911,7 +1949,8 @@ TEST(Hover, All) {
             HI.Definition = "void indexSymbol()";
             HI.ReturnType = "void";
             HI.Parameters = std::vector<HoverInfo::Param>{};
-            HI.Documentation = "comment from index";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("comment from index");
           }},
       {
           R"cpp(// Simple initialization with auto
@@ -2080,7 +2119,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "auto function return with trailing type";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "auto function return with trailing type");
           }},
       {
           R"cpp(// trailing return type
@@ -2093,7 +2133,8 @@ TEST(Hover, All) {
             HI.Name = "decltype";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "trailing return type";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "trailing return type");
           }},
       {
           R"cpp(// auto in function return
@@ -2106,7 +2147,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "auto in function return";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "auto in function return");
           }},
       {
           R"cpp(// auto& in function return
@@ -2120,7 +2162,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "auto& in function return";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "auto& in function return");
           }},
       {
           R"cpp(// auto* in function return
@@ -2134,7 +2177,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "auto* in function return";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "auto* in function return");
           }},
       {
           R"cpp(// const auto& in function return
@@ -2148,7 +2192,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "const auto& in function return";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "const auto& in function return");
           }},
       {
           R"cpp(// decltype(auto) in function return
@@ -2161,7 +2206,8 @@ TEST(Hover, All) {
             HI.Name = "decltype";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation = "decltype(auto) in function return";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "decltype(auto) in function return");
           }},
       {
           R"cpp(// decltype(auto) reference in function return
@@ -2251,8 +2297,8 @@ TEST(Hover, All) {
             HI.Name = "decltype";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "Bar";
-            HI.Documentation =
-                "decltype of function with trailing return type.";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "decltype of function with trailing return type.");
           }},
       {
           R"cpp(// decltype of var with decltype.
@@ -2322,7 +2368,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "cls_type // aka: cls";
-            HI.Documentation = "auto on alias";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("auto on alias");
           }},
       {
           R"cpp(// auto on alias
@@ -2334,7 +2381,8 @@ TEST(Hover, All) {
             HI.Name = "auto";
             HI.Kind = index::SymbolKind::TypeAlias;
             HI.Definition = "templ<int>";
-            HI.Documentation = "auto on alias";
+            HI.Documentation =
+                SymbolDocumentationOwned::descriptionOnly("auto on alias");
           }},
       {
           R"cpp(// Undeduced auto declaration
@@ -2425,7 +2473,8 @@ TEST(Hover, All) {
             HI.Kind = index::SymbolKind::Struct;
             HI.NamespaceScope = "";
             HI.Name = "cls<cls<cls<int>>>";
-            HI.Documentation = "type of nested templates.";
+            HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+                "type of nested templates.");
           }},
       {
           R"cpp(// type with decltype
@@ -2719,7 +2768,8 @@ TEST(Hover, All) {
          HI.Name = "nonnull";
          HI.Kind = index::SymbolKind::Unknown; // FIXME: no suitable value
          HI.Definition = "__attribute__((nonnull))";
-         HI.Documentation = Attr::getDocumentation(attr::NonNull).str();
+         HI.Documentation = SymbolDocumentationOwned::descriptionOnly(
+             Attr::getDocumentation(attr::NonNull).str());
        }},
   };
 
@@ -2758,7 +2808,7 @@ TEST(Hover, All) {
     EXPECT_EQ(H->LocalScope, Expected.LocalScope);
     EXPECT_EQ(H->Name, Expected.Name);
     EXPECT_EQ(H->Kind, Expected.Kind);
-    EXPECT_EQ(H->Documentation, Expected.Documentation);
+    ASSERT_THAT(H->Documentation, matchesDoc(Expected.Documentation));
     EXPECT_EQ(H->Definition, Expected.Definition);
     EXPECT_EQ(H->Type, Expected.Type);
     EXPECT_EQ(H->ReturnType, Expected.ReturnType);
@@ -2791,7 +2841,9 @@ TEST(Hover, DocsFromIndex) {
   for (const auto &P : T.points()) {
     auto H = getHover(AST, P, format::getLLVMStyle(), Index.get());
     ASSERT_TRUE(H);
-    EXPECT_EQ(H->Documentation, IndexSym.Documentation);
+    ASSERT_THAT(H->Documentation,
+                matchesDoc(SymbolDocumentationOwned::descriptionOnly(
+                    std::string(IndexSym.Documentation))));
   }
 }
 
@@ -2816,7 +2868,8 @@ TEST(Hover, DocsFromAST) {
   for (const auto &P : T.points()) {
     auto H = getHover(AST, P, format::getLLVMStyle(), nullptr);
     ASSERT_TRUE(H);
-    EXPECT_EQ(H->Documentation, "doc");
+    ASSERT_THAT(H->Documentation,
+                matchesDoc(SymbolDocumentationOwned::descriptionOnly("doc")));
   }
 }
 
@@ -2854,7 +2907,9 @@ TEST(Hover, DocsFromMostSpecial) {
     for (const auto &P : T.points(Comment)) {
       auto H = getHover(AST, P, format::getLLVMStyle(), nullptr);
       ASSERT_TRUE(H);
-      EXPECT_EQ(H->Documentation, Comment);
+      ASSERT_THAT(
+          H->Documentation,
+          matchesDoc(SymbolDocumentationOwned::descriptionOnly(Comment)));
     }
   }
 }
@@ -2886,7 +2941,14 @@ TEST(Hover, Present) {
                 {{"typename"}, std::string("T"), llvm::None},
                 {{"typename"}, std::string("C"), std::string("bool")},
             };
-            HI.Documentation = "documentation";
+            HI.Documentation.Brief = "brief";
+            HI.Documentation.Description = "details";
+            HI.Documentation.Parameters = {
+                {"Parameters", "should be ignored for classes"}};
+            HI.Documentation.Returns = "Returns should be ignored for classes";
+            HI.Documentation.Notes = {"note1", "note2"};
+            HI.Documentation.Warnings = {"warning1", "warning2"};
+            HI.Documentation.CommentText = "Not used for Hover presentation";
             HI.Definition =
                 "template <typename T, typename C = bool> class Foo {}";
             HI.Name = "foo";
@@ -2894,8 +2956,17 @@ TEST(Hover, Present) {
           },
           R"(class foo
 
+brief
 Size: 10 bytes
-documentation
+details
+
+Warnings:
+- warning1
+- warning2
+
+Notes:
+- note1
+- note2
 
 template <typename T, typename C = bool> class Foo {})",
       },
@@ -2914,17 +2985,37 @@ template <typename T, typename C = bool> class Foo {})",
             HI.Parameters->push_back(P);
             P.Default = "default";
             HI.Parameters->push_back(P);
+            HI.Documentation.Brief = "brief";
+            HI.Documentation.Description = "details";
+            HI.Documentation.Parameters = {
+                {"foo", "param doc"},
+                {"bar", "doc for parameter not in the signature"}};
+            HI.Documentation.Returns = "doc for return";
+            HI.Documentation.Notes = {"note1", "note2"};
+            HI.Documentation.Warnings = {"warning1", "warning2"};
+            HI.Documentation.CommentText = "Not used for Hover presentation";
             HI.NamespaceScope = "ns::";
             HI.Definition = "ret_type foo(params) {}";
           },
           "function foo\n"
           "\n"
-          "→ ret_type (aka can_ret_type)\n"
+          "brief\n"
+          "→ ret_type (aka can_ret_type): doc for return\n"
           "Parameters:\n"
           "- \n"
           "- type (aka can_type)\n"
-          "- type foo (aka can_type)\n"
+          "- type foo (aka can_type): param doc\n"
           "- type foo = default (aka can_type)\n"
+          "- bar: doc for parameter not in the signature\n"
+          "details\n"
+          "\n"
+          "Warnings:\n"
+          "- warning1\n"
+          "- warning2\n"
+          "\n"
+          "Notes:\n"
+          "- note1\n"
+          "- note2\n"
           "\n"
           "// In namespace ns\n"
           "ret_type foo(params) {}",
@@ -3296,7 +3387,7 @@ TEST(Hover, SpaceshipTemplateNoCrash) {
 
   template <typename T>
   struct S {
-    // Foo bar baz
+    /// Foo bar baz
     friend auto operator<=>(S, S) = default;
   };
   static_assert(S<void>() =^= S<void>());
@@ -3306,7 +3397,10 @@ TEST(Hover, SpaceshipTemplateNoCrash) {
   TU.ExtraArgs.push_back("-std=c++20");
   auto AST = TU.build();
   auto HI = getHover(AST, T.point(), format::getLLVMStyle(), nullptr);
-  EXPECT_EQ(HI->Documentation, "Foo bar baz");
+
+  ASSERT_THAT(
+      HI->Documentation,
+      matchesDoc(SymbolDocumentationOwned::descriptionOnly("Foo bar baz")));
 }
 
 TEST(Hover, ForwardStructNoCrash) {
