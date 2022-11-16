@@ -26,11 +26,19 @@ class Annotations : public llvm::Annotations {
 public:
   using llvm::Annotations::Annotations;
 
-  Position point(llvm::StringRef Name = "") const;
+  clangd::Position point(llvm::StringRef Name = "") const;
+  std::pair<clangd::Position, llvm::StringRef>
+  pointWithPayload(llvm::StringRef Name = "") const;
   std::vector<Position> points(llvm::StringRef Name = "") const;
+  std::vector<std::pair<clangd::Position, llvm::StringRef>>
+  pointsWithPayload(llvm::StringRef Name = "") const;
 
   clangd::Range range(llvm::StringRef Name = "") const;
+  std::pair<clangd::Range, llvm::StringRef>
+  rangeWithPayload(llvm::StringRef Name = "") const;
   std::vector<clangd::Range> ranges(llvm::StringRef Name = "") const;
+  std::vector<std::pair<clangd::Range, llvm::StringRef>>
+  rangesWithPayload(llvm::StringRef Name = "") const;
 };
 
 } // namespace clangd
