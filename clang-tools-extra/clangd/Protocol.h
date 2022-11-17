@@ -228,6 +228,33 @@ struct Location {
 llvm::json::Value toJSON(const Location &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Location &);
 
+/// Special Location-like type to be used for textDocument/references
+/// Contains an additional field for the context in which the reference occurs
+struct ReferenceLocation : Location {
+  /// clangd extension: contains the name of the function or class in which the
+  /// reference occurs
+  llvm::Optional<std::string> context;
+
+  friend bool operator==(const ReferenceLocation &LHS,
+                         const ReferenceLocation &RHS) {
+    return LHS.uri == RHS.uri && LHS.range == RHS.range &&
+           LHS.context == RHS.context;
+  }
+
+  friend bool operator!=(const ReferenceLocation &LHS,
+                         const ReferenceLocation &RHS) {
+    return !(LHS == RHS);
+  }
+
+  friend bool operator<(const ReferenceLocation &LHS,
+                        const ReferenceLocation &RHS) {
+    return std::tie(LHS.uri, LHS.range, LHS.context) <
+           std::tie(RHS.uri, RHS.range, RHS.context);
+  }
+};
+llvm::json::Value toJSON(const ReferenceLocation &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const ReferenceLocation &);
+
 struct TextEdit {
   /// The range of the text document to be manipulated. To insert
   /// text into a document create a range where start === end.

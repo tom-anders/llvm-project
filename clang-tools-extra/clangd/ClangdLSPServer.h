@@ -120,7 +120,7 @@ private:
                   Callback<std::vector<Location>>);
   void onGoToImplementation(const TextDocumentPositionParams &,
                             Callback<std::vector<Location>>);
-  void onReference(const ReferenceParams &, Callback<std::vector<Location>>);
+  void onReference(const ReferenceParams &, Callback<std::vector<ReferenceLocation>>);
   void onSwitchSourceHeader(const TextDocumentIdentifier &,
                             Callback<llvm::Optional<URIForFile>>);
   void onDocumentHighlight(const TextDocumentPositionParams &,

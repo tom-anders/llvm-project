@@ -859,6 +859,7 @@ public:
     syntax::Token SpelledTok;
     index::SymbolRoleSet Role;
     SymbolID Target;
+    const DeclContext *Context;
 
     Range range(const SourceManager &SM) const {
       return halfOpenToRange(SM, SpelledTok.range(SM).toCharRange(SM));
@@ -927,7 +928,8 @@ public:
     for (SourceLocation L : Locs) {
       L = SM.getFileLoc(L);
       if (const auto *Tok = TB.spelledTokenAt(L))
-        References.push_back({*Tok, Roles, DeclID->getSecond()});
+        References.push_back(
+            {*Tok, Roles, DeclID->getSecond(), ASTNode.ContainerDC});
     }
     return true;
   }
@@ -1300,6 +1302,17 @@ void getOverriddenMethods(const CXXMethodDecl *CMD,
     getOverriddenMethods(Base, OverriddenMethods);
   }
 }
+
+llvm::Optional<std::string>
+getContextStringForMainFileRef(const DeclContext *DeclCtx) {
+  for (auto *Ctx = DeclCtx; Ctx; Ctx = Ctx->getParent()) {
+    if (const auto *FD = llvm::dyn_cast<FunctionDecl>(Ctx))
+      return FD->getQualifiedNameAsString();
+    if (const auto *RD = llvm::dyn_cast<CXXRecordDecl>(Ctx))
+      return RD->getQualifiedNameAsString();
+  }
+  return {};
+}
 } // namespace
 
 ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
@@ -1394,6 +1407,7 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
       ReferencesResult::Reference Result;
       Result.Loc.range = Ref.range(SM);
       Result.Loc.uri = URIMainFile;
+      Result.Loc.context = getContextStringForMainFileRef(Ref.Context);
       if (Ref.Role & static_cast<unsigned>(index::SymbolRole::Declaration))
         Result.Attributes |= ReferencesResult::Declaration;
       // clang-index doesn't report definitions as declarations, but they are.
@@ -1404,6 +1418,8 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
     }
     // Add decl/def of overridding methods.
     if (Index && !OverriddenBy.Subjects.empty()) {
+      LookupRequest ContainerLookup;
+      llvm::DenseMap<SymbolID, size_t> RefIndexForContainer;
       Index->relations(OverriddenBy, [&](const SymbolID &Subject,
                                          const Symbol &Object) {
         if (Limit && Results.References.size() >= Limit) {
@@ -1413,21 +1429,33 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
         const auto LSPLocDecl =
             toLSPLocation(Object.CanonicalDeclaration, MainFilePath);
         const auto LSPLocDef = toLSPLocation(Object.Definition, MainFilePath);
+        // TODO can just merge the two ifs?!
         if (LSPLocDecl && LSPLocDecl != LSPLocDef) {
           ReferencesResult::Reference Result;
-          Result.Loc = std::move(*LSPLocDecl);
+          Result.Loc = {std::move(*LSPLocDecl), llvm::None};
           Result.Attributes =
               ReferencesResult::Declaration | ReferencesResult::Override;
+          RefIndexForContainer.insert({Object.ID, Results.References.size()});
+          ContainerLookup.IDs.insert(Object.ID);
           Results.References.push_back(std::move(Result));
         }
         if (LSPLocDef) {
           ReferencesResult::Reference Result;
-          Result.Loc = std::move(*LSPLocDef);
+          Result.Loc = {std::move(*LSPLocDef), llvm::None};
           Result.Attributes = ReferencesResult::Declaration |
                               ReferencesResult::Definition |
                               ReferencesResult::Override;
+          RefIndexForContainer.insert({Object.ID, Results.References.size()});
+          ContainerLookup.IDs.insert(Object.ID);
           Results.References.push_back(std::move(Result));
         }
+      });
+
+      Index->lookup(ContainerLookup, [&](const Symbol &Container) {
+        auto Ref = RefIndexForContainer.find(Container.ID);
+        assert(Ref != RefIndexForContainer.end());
+        Results.References[Ref->getSecond()].Loc.context =
+            Container.Scope.drop_back(2).str(); // Drop trailing "::" 
       });
     }
   }
@@ -1448,6 +1476,8 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
         Req.Limit = Limit - Results.References.size();
       }
     }
+    LookupRequest ContainerLookup;
+    llvm::DenseMap<SymbolID, size_t> RefIndexForContainer;
     Results.HasMore |= Index->refs(Req, [&](const Ref &R) {
       auto LSPLoc = toLSPLocation(R.Location, MainFilePath);
       // Avoid indexed results for the main file - the AST is authoritative.
@@ -1455,7 +1485,7 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
           (!AllowMainFileSymbols && LSPLoc->uri.file() == MainFilePath))
         return;
       ReferencesResult::Reference Result;
-      Result.Loc = std::move(*LSPLoc);
+      Result.Loc = {std::move(*LSPLoc), llvm::None};
       if (AllowAttributes) {
         if ((R.Kind & RefKind::Declaration) == RefKind::Declaration)
           Result.Attributes |= ReferencesResult::Declaration;
@@ -1464,7 +1494,18 @@ ReferencesResult findReferences(ParsedAST &AST, Position Pos, uint32_t Limit,
           Result.Attributes |=
               ReferencesResult::Declaration | ReferencesResult::Definition;
       }
+      SymbolID Container = R.Container;
+      ContainerLookup.IDs.insert(Container);
       Results.References.push_back(std::move(Result));
+      RefIndexForContainer[Container] = Results.References.size() - 1;
+    });
+
+    Index->lookup(ContainerLookup, [&](const Symbol &Container) {
+      auto Ref = RefIndexForContainer.find(Container.ID);
+      assert(Ref != RefIndexForContainer.end());
+      Results.References[Ref->getSecond()].Loc.context =
+          Container.Scope.str() + Container.Name.str() +
+          Container.Signature.str();
     });
   };
   QueryIndex(std::move(IDsToQuery), /*AllowAttributes=*/true,

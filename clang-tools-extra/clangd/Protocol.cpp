@@ -161,6 +161,21 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Location &L) {
   return OS << L.range << '@' << L.uri;
 }
 
+llvm::json::Value toJSON(const ReferenceLocation &P) {
+  llvm::json::Object Result{
+      {"uri", P.uri},
+      {"range", P.range},
+  };
+  if (P.context)
+    Result.insert({"context", P.context});
+  return Result;
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                              const ReferenceLocation &L) {
+  return OS << L.range << '@' << L.uri << " (context: " << L.context << ")";
+}
+
 bool fromJSON(const llvm::json::Value &Params, TextDocumentItem &R,
               llvm::json::Path P) {
   llvm::json::ObjectMapper O(Params, P);

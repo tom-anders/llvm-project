@@ -302,6 +302,7 @@ MATCHER_P3(sym, Name, Decl, DefOrNone, "") {
 MATCHER_P(sym, Name, "") { return arg.Name == Name; }
 
 MATCHER_P(rangeIs, R, "") { return arg.Loc.range == R; }
+MATCHER_P(contextIs, C, "") { return arg.Loc.context.value_or("") == C; }
 MATCHER_P(attrsAre, A, "") { return arg.Attributes == A; }
 MATCHER_P(hasID, ID, "") { return arg.ID == ID; }
 
@@ -1900,26 +1901,27 @@ void checkFindRefs(llvm::StringRef Test, bool UseIndex = false) {
 
   auto AST = TU.build();
   std::vector<Matcher<ReferencesResult::Reference>> ExpectedLocations;
-  for (const auto &R : T.ranges())
-    ExpectedLocations.push_back(AllOf(rangeIs(R), attrsAre(0u)));
+  for (const auto &[R, Context] : T.rangesWithPayload())
+    ExpectedLocations.push_back(
+        AllOf(rangeIs(R), contextIs(Context), attrsAre(0u)));
   // $def is actually shorthand for both definition and declaration.
   // If we have cases that are definition-only, we should change this.
-  for (const auto &R : T.ranges("def"))
-    ExpectedLocations.push_back(
-        AllOf(rangeIs(R), attrsAre(ReferencesResult::Definition |
-                                   ReferencesResult::Declaration)));
-  for (const auto &R : T.ranges("decl"))
-    ExpectedLocations.push_back(
-        AllOf(rangeIs(R), attrsAre(ReferencesResult::Declaration)));
-  for (const auto &R : T.ranges("overridedecl"))
+  for (const auto &[R, Context] : T.rangesWithPayload("def"))
+    ExpectedLocations.push_back(AllOf(rangeIs(R), contextIs(Context),
+                                      attrsAre(ReferencesResult::Definition |
+                                               ReferencesResult::Declaration)));
+  for (const auto &[R, Context] : T.rangesWithPayload("decl"))
+    ExpectedLocations.push_back(AllOf(rangeIs(R), contextIs(Context),
+                                      attrsAre(ReferencesResult::Declaration)));
+  for (const auto &[R, Context] : T.rangesWithPayload("overridedecl"))
     ExpectedLocations.push_back(AllOf(
-        rangeIs(R),
+        rangeIs(R), contextIs(Context),
         attrsAre(ReferencesResult::Declaration | ReferencesResult::Override)));
-  for (const auto &R : T.ranges("overridedef"))
-    ExpectedLocations.push_back(
-        AllOf(rangeIs(R), attrsAre(ReferencesResult::Declaration |
-                                   ReferencesResult::Definition |
-                                   ReferencesResult::Override)));
+  for (const auto &[R, Context] : T.rangesWithPayload("overridedef"))
+    ExpectedLocations.push_back(AllOf(rangeIs(R), contextIs(Context),
+                                      attrsAre(ReferencesResult::Declaration |
+                                               ReferencesResult::Definition |
+                                               ReferencesResult::Override)));
   for (const auto &P : T.points()) {
     EXPECT_THAT(findReferences(AST, P, 0, UseIndex ? TU.index().get() : nullptr)
                     .References,
@@ -1933,9 +1935,9 @@ TEST(FindReferences, WithinAST) {
   const char *Tests[] = {
       R"cpp(// Local variable
         int main() {
-          int $def[[foo]];
-          [[^foo]] = 2;
-          int test1 = [[foo]];
+          int $def(main)[[foo]];
+          $(main)[[^foo]] = 2;
+          int test1 = $(main)[[foo]];
         }
       )cpp",
 
@@ -1944,7 +1946,7 @@ TEST(FindReferences, WithinAST) {
         struct $def[[Foo]] {};
         } // namespace ns1
         int main() {
-          ns1::[[Fo^o]]* Params;
+          ns1::$(main)[[Fo^o]]* Params;
         }
       )cpp",
 
@@ -1952,51 +1954,51 @@ TEST(FindReferences, WithinAST) {
         class $decl[[Foo]];
         class $def[[Foo]] {};
         int main() {
-          [[Fo^o]] foo;
+          $(main)[[Fo^o]] foo;
         }
       )cpp",
 
       R"cpp(// Function
         int $def[[foo]](int) {}
         int main() {
-          auto *X = &[[^foo]];
-          [[foo]](42);
+          auto *X = &$(main)[[^foo]];
+          $(main)[[foo]](42);
         }
       )cpp",
 
       R"cpp(// Field
         struct Foo {
-          int $def[[foo]];
-          Foo() : [[foo]](0) {}
+          int $def(Foo)[[foo]];
+          Foo() : $(Foo::Foo)[[foo]](0) {}
         };
         int main() {
           Foo f;
-          f.[[f^oo]] = 1;
+          f.$(main)[[f^oo]] = 1;
         }
       )cpp",
 
       R"cpp(// Method call
-        struct Foo { int $decl[[foo]](); };
-        int Foo::$def[[foo]]() {}
+        struct Foo { int $decl(Foo)[[foo]](); };
+        int Foo::$def(Foo)[[foo]]() {}
         int main() {
           Foo f;
-          f.[[^foo]]();
+          f.$(main)[[^foo]]();
         }
       )cpp",
 
       R"cpp(// Constructor
         struct Foo {
-          $decl[[F^oo]](int);
+          $decl(Foo)[[F^oo]](int);
         };
         void foo() {
-          Foo f = [[Foo]](42);
+          Foo f = $(foo)[[Foo]](42);
         }
       )cpp",
 
       R"cpp(// Typedef
         typedef int $def[[Foo]];
         int main() {
-          [[^Foo]] bar;
+          $(main)[[^Foo]] bar;
         }
       )cpp",
 
@@ -2004,7 +2006,7 @@ TEST(FindReferences, WithinAST) {
         namespace $decl[[ns]] { // FIXME: def?
         struct Foo {};
         } // namespace ns
-        int main() { [[^ns]]::Foo foo; }
+        int main() { $(main)[[^ns]]::Foo foo; }
       )cpp",
 
       R"cpp(// Macros
@@ -2013,17 +2015,18 @@ TEST(FindReferences, WithinAST) {
         #define CAT(X, Y) X##Y
         class $def[[Fo^o]] {};
         void test() {
-          TYPE([[Foo]]) foo;
-          [[FOO]] foo2;
-          TYPE(TYPE([[Foo]])) foo3;
-          [[CAT]](Fo, o) foo4;
+          TYPE($(test)[[Foo]]) foo;
+          $(test)[[FOO]] foo2;
+          TYPE(TYPE($(test)[[Foo]])) foo3;
+          $(test)[[CAT]](Fo, o) foo4;
         }
       )cpp",
 
+      // FIXME Macro occurrences don't get a context yet
       R"cpp(// Macros
         #define $def[[MA^CRO]](X) (X+1)
         void test() {
-          int x = [[MACRO]]([[MACRO]](1));
+          int x = $[[MACRO]]($[[MACRO]](1));
         }
       )cpp",
 
@@ -2031,19 +2034,19 @@ TEST(FindReferences, WithinAST) {
         int breakPreamble;
         #define $def[[MA^CRO]](X) (X+1)
         void test() {
-          int x = [[MACRO]]([[MACRO]](1));
+          int x = $[[MACRO]]($[[MACRO]](1));
         }
       )cpp",
 
       R"cpp(
         int $def[[v^ar]] = 0;
-        void foo(int s = [[var]]);
+        void foo(int s = $[[var]]);
       )cpp",
 
       R"cpp(
        template <typename T>
        class $def[[Fo^o]] {};
-       void func([[Foo]]<int>);
+       void func($[[Foo]]<int>);
       )cpp",
 
       R"cpp(
@@ -2053,17 +2056,17 @@ TEST(FindReferences, WithinAST) {
       )cpp",
       R"cpp(// Not touching any identifiers.
         struct Foo {
-          $def[[~]]Foo() {};
+          $def(Foo)[[~]]Foo() {};
         };
         void foo() {
           Foo f;
-          f.[[^~]]Foo();
+          f.$(foo)[[^~]]Foo();
         }
       )cpp",
       R"cpp(// Lambda capture initializer
         void foo() {
-          int $def[[w^aldo]] = 42;
-          auto lambda = [x = [[waldo]]](){};
+          int $def(foo)[[w^aldo]] = 42;
+          auto lambda = [x = $(foo)[[waldo]]](){};
         }
       )cpp",
       R"cpp(// Renaming alias
@@ -2075,8 +2078,8 @@ TEST(FindReferences, WithinAST) {
       )cpp",
       R"cpp(// Dependent code
         template <typename T> void $decl[[foo]](T t);
-        template <typename T> void bar(T t) { [[foo]](t); } // foo in bar is uninstantiated.
-        void baz(int x) { [[f^oo]](x); }
+        template <typename T> void bar(T t) { $(bar)[[foo]](t); } // foo in bar is uninstantiated. 
+        void baz(int x) { $(baz)[[f^oo]](x); }
       )cpp",
       R"cpp(
         namespace ns {
@@ -2090,15 +2093,15 @@ TEST(FindReferences, WithinAST) {
         void baz(int x) {
           ns::S s;
           bar<ns::S>(s);
-          [[f^oo]](s);
+          $(baz)[[f^oo]](s);
         }
       )cpp",
       R"cpp(// unresolved member expression
         struct Foo {
-          template <typename T> void $decl[[b^ar]](T t); 
+          template <typename T> void $decl(Foo)[[b^ar]](T t);
         };
         template <typename T> void test(Foo F, T t) {
-          F.[[bar]](t);
+          F.$(test)[[bar]](t);
         }
       )cpp",
 
@@ -2131,7 +2134,7 @@ TEST(FindReferences, ConceptsWithinAST) {
     };
 
     [[IsSmall]] auto i = 'c';
-    template<[[IsSmal^l]] U> void foo();
+    template<$(foo)[[IsSmal^l]] U> void foo();
     template<class U> void bar() requires [[IsSmal^l]]<U>;
     template<class U> requires [[IsSmal^l]]<U> void baz();
     static_assert([[IsSma^ll]]<char>);
@@ -2146,6 +2149,7 @@ TEST(FindReferences, ConceptReq) {
 
     template <class T>
     concept IsSmallPtr = requires(T x) {
+      // FIXME Should probably report IsSmallPtr as context here
       { *x } -> [[IsSmal^l]];
     };
   )cpp";
@@ -2170,17 +2174,17 @@ TEST(FindReferences, IncludeOverrides) {
       R"cpp(
         class Base {
         public:
-          virtu^al void $decl[[f^unc]]() ^= ^0;
+          virtu^al void $decl(Base)[[f^unc]]() ^= ^0;
         };
         class Derived : public Base {
         public:
-          void $overridedecl[[func]]() override;
+          void $overridedecl(Derived)[[func]]() override;
         };
         void Derived::$overridedef[[func]]() {}
         class Derived2 : public Base {
-          void $overridedef[[func]]() override {}
+          void $overridedef(Derived2)[[func]]() override {}
         };
-        void test(Derived* D) {
+        void test(Derived* D, Base* B) {
           D->func();  // No references to the overrides.
         })cpp";
   checkFindRefs(Test, /*UseIndex=*/true);
@@ -2191,21 +2195,23 @@ TEST(FindReferences, RefsToBaseMethod) {
       R"cpp(
         class BaseBase {
         public:
-          virtual void [[func]]();
+          virtual void $(BaseBase)[[func]]();
         };
         class Base : public BaseBase {
         public:
-          void [[func]]() override;
+          void $(Base)[[func]]() override;
         };
         class Derived : public Base {
         public:
-          void $decl[[fu^nc]]() over^ride;
+          void $decl(Derived)[[fu^nc]]() over^ride;
         };
         void test(BaseBase* BB, Base* B, Derived* D) {
           // refs to overridden methods in complete type hierarchy are reported.
-          BB->[[func]]();
-          B->[[func]]();
-          D->[[fu^nc]]();
+          // FIXME BB->func() gets no context here, this seems to be a bug (or feature?)
+          // in the index for multiple levels of inheritance
+          BB->$[[func]]();
+          B->$(test)[[func]]();
+          D->$(test)[[fu^nc]]();
         })cpp";
   checkFindRefs(Test, /*UseIndex=*/true);
 }
@@ -2214,7 +2220,7 @@ TEST(FindReferences, MainFileReferencesOnly) {
   llvm::StringRef Test =
       R"cpp(
         void test() {
-          int [[fo^o]] = 1;
+          int $(test)[[fo^o]] = 1;
           // refs not from main file should not be included.
           #include "foo.inc"
         })cpp";
@@ -2237,18 +2243,18 @@ TEST(FindReferences, MainFileReferencesOnly) {
 TEST(FindReferences, ExplicitSymbols) {
   const char *Tests[] = {
       R"cpp(
-      struct Foo { Foo* $decl[[self]]() const; };
+      struct Foo { Foo* $decl(Foo)[[self]]() const; };
       void f() {
         Foo foo;
-        if (Foo* T = foo.[[^self]]()) {} // Foo member call expr.
+        if (Foo* T = foo.$(f)[[^self]]()) {} // Foo member call expr.
       }
       )cpp",
 
       R"cpp(
       struct Foo { Foo(int); };
       Foo f() {
-        int $def[[b]];
-        return [[^b]]; // Foo constructor expr.
+        int $def(f)[[b]];
+        return $(f)[[^b]]; // Foo constructor expr.
       }
       )cpp",
 
@@ -2257,7 +2263,7 @@ TEST(FindReferences, ExplicitSymbols) {
       void g(Foo);
       Foo $decl[[f]]();
       void call() {
-        g([[^f]]());  // Foo constructor expr.
+        g($(call)[[^f]]());  // Foo constructor expr.
       }
       )cpp",
 
@@ -2276,9 +2282,9 @@ TEST(FindReferences, ExplicitSymbols) {
       };
 
       int test() {
-        X $def[[a]];
-        [[a]].operator bool();
-        if ([[a^]]) {} // ignore implicit conversion-operator AST node
+        X $def(test)[[a]];
+        $(test)[[a]].operator bool();
+        if ($(test)[[a^]]) {} // ignore implicit conversion-operator AST node
       }
     )cpp",
   };
@@ -2299,7 +2305,10 @@ TEST(FindReferences, NeedsIndexForSymbols) {
       findReferences(AST, Main.point(), 0, /*Index=*/nullptr).References,
       ElementsAre(rangeIs(Main.range())));
   Annotations IndexedMain(R"cpp(
-    int [[foo]]() { return 42; }
+    int $decl[[foo]]() { return 42; }
+    void bar() { $bar(bar)[[foo]](); }
+    struct S { void bar() { $S(S::bar)[[foo]](); } };
+    namespace N { void bar() { $N(N::bar)[[foo]](); } }
   )cpp");
 
   // References from indexed files are included.
@@ -2310,9 +2319,13 @@ TEST(FindReferences, NeedsIndexForSymbols) {
   EXPECT_THAT(
       findReferences(AST, Main.point(), 0, IndexedTU.index().get()).References,
       ElementsAre(rangeIs(Main.range()),
-                  AllOf(rangeIs(IndexedMain.range()),
+                  AllOf(rangeIs(IndexedMain.range("decl")),
                         attrsAre(ReferencesResult::Declaration |
-                                 ReferencesResult::Definition))));
+                                 ReferencesResult::Definition)),
+                  AllOf(rangeIs(IndexedMain.range("bar")), contextIs("bar")),
+                  AllOf(rangeIs(IndexedMain.range("S")), contextIs("S::bar")),
+                  AllOf(rangeIs(IndexedMain.range("N")), contextIs("N::bar"))
+                  ));
   auto LimitRefs =
       findReferences(AST, Main.point(), /*Limit*/ 1, IndexedTU.index().get());
   EXPECT_EQ(1u, LimitRefs.References.size());

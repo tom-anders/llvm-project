@@ -1376,8 +1376,9 @@ void ClangdLSPServer::onChangeConfiguration(
   applyConfiguration(Params.settings);
 }
 
-void ClangdLSPServer::onReference(const ReferenceParams &Params,
-                                  Callback<std::vector<Location>> Reply) {
+void ClangdLSPServer::onReference(
+    const ReferenceParams &Params,
+    Callback<std::vector<ReferenceLocation>> Reply) {
   Server->findReferences(
       Params.textDocument.uri.file(), Params.position, Opts.ReferencesLimit,
       [Reply = std::move(Reply),
@@ -1386,7 +1387,7 @@ void ClangdLSPServer::onReference(const ReferenceParams &Params,
         if (!Refs)
           return Reply(Refs.takeError());
         // Filter out declarations if the client asked.
-        std::vector<Location> Result;
+        std::vector<ReferenceLocation> Result;
         Result.reserve(Refs->References.size());
         for (auto &Ref : Refs->References) {
           bool IsDecl = Ref.Attributes & ReferencesResult::Declaration;

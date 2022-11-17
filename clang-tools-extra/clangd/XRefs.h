@@ -88,7 +88,7 @@ struct ReferencesResult {
     Override = 1 << 2,
   };
   struct Reference {
-    Location Loc;
+    ReferenceLocation Loc;
     unsigned Attributes = 0;
   };
   std::vector<Reference> References;
