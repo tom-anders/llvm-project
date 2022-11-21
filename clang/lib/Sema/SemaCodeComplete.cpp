@@ -1401,10 +1401,7 @@ void ResultBuilder::AddResult(Result R, DeclContext *CurContext,
         return nullptr;
       }();
 
-      R.FunctionCanBeCall =
-          CurrentClassScope &&
-          (CurrentClassScope == Method->getParent() ||
-           CurrentClassScope->isDerivedFrom(Method->getParent()));
+      R.FunctionCanBeCall = false;
     }
   }
 
