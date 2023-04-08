@@ -981,10 +981,21 @@ void maybeAddCalleeArgInfo(const SelectionTree::Node *N, HoverInfo &HI,
   const auto &OuterNode = N->outerImplicit();
   if (!OuterNode.Parent)
     return;
-  const auto *CE = OuterNode.Parent->ASTNode.get<CallExpr>();
-  if (!CE)
+
+  const FunctionDecl *FD = nullptr;
+  llvm::SmallVector<const Expr*> Args;
+
+  if (const auto *CE = OuterNode.Parent->ASTNode.get<CallExpr>()) {
+    FD = CE->getDirectCallee();
+    Args = {CE->arg_begin(), CE->arg_end()};
+  } else if (const auto *CE =
+                 OuterNode.Parent->ASTNode.get<CXXConstructExpr>()) {
+    FD = CE->getConstructor();
+    Args = {CE->arg_begin(), CE->arg_end()};
+  }
+  if (!FD)
     return;
-  const FunctionDecl *FD = CE->getDirectCallee();
+
   // For non-function-call-like operatators (e.g. operator+, operator<<) it's
   // not immediattely obvious what the "passed as" would refer to and, given
   // fixed function signature, the value would be very low anyway, so we choose
@@ -999,8 +1010,8 @@ void maybeAddCalleeArgInfo(const SelectionTree::Node *N, HoverInfo &HI,
   auto Parameters = resolveForwardingParameters(FD);
 
   // Find argument index for N.
-  for (unsigned I = 0; I < CE->getNumArgs() && I < Parameters.size(); ++I) {
-    if (CE->getArg(I) != OuterNode.ASTNode.get<Expr>())
+  for (unsigned I = 0; I < Args.size() && I < Parameters.size(); ++I) {
+    if (Args[I] != OuterNode.ASTNode.get<Expr>())
       continue;
 
     // Extract matching argument from function declaration.
