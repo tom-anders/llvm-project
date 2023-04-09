@@ -6119,6 +6119,38 @@ QualType Sema::ProduceCallSignatureHelp(Expr *Fn, ArrayRef<Expr *> Args,
   OverloadCandidateSet CandidateSet(Loc, OverloadCandidateSet::CSK_Normal);
 
   if (auto ULE = dyn_cast<UnresolvedLookupExpr>(NakedFn)) {
+    if (ULE->getNumDecls() > 0) {
+      std::string QualifiedName;
+      llvm::raw_string_ostream OS(QualifiedName);
+      if (const auto *NC = ULE->getNamingClass()) {
+        NC->printQualifiedName(OS);
+        OS << "::";
+        ULE->decls().begin()->printName(OS);
+
+        if (QualifiedName == "QSharedPointer::create") {
+          if (const auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(
+                  ULE->getNamingClass())) {
+            const auto &TemplateArgs = CTSD->getTemplateArgs();
+            if (TemplateArgs.size() == 1) {
+              return ProduceConstructorSignatureHelp(
+                  TemplateArgs[0].getAsType(), OpenParLoc, Args, OpenParLoc,
+                  false);
+            }
+          }
+        }
+      } else {
+        ULE->decls().begin()->printQualifiedName(OS);
+        if (QualifiedName == "std::make_unique" ||
+            QualifiedName == "std::make_shared") {
+          if (ULE->getNumTemplateArgs() == 1) {
+            return ProduceConstructorSignatureHelp(
+                ULE->template_arguments().front().getArgument().getAsType(), OpenParLoc,
+                Args, OpenParLoc, false);
+          }
+        }
+      }
+    }
+
     AddOverloadedCallCandidates(ULE, ArgsWithoutDependentTypes, CandidateSet,
                                 /*PartialOverloading=*/true);
   } else if (auto UME = dyn_cast<UnresolvedMemberExpr>(NakedFn)) {

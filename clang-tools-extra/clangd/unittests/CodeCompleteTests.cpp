@@ -1377,6 +1377,39 @@ Matcher<SignatureInformation> sig(llvm::StringRef AnnotatedLabel) {
   return AllOf(sigHelpLabeled(Label), paramsAre(Parameters));
 }
 
+TEST(SignatureHelpTest, SmartPointerFactoryFunctions) {
+  auto Code = Annotations(R"cpp(
+    namespace std { 
+    template<class T, class... Args>
+    T make_unique(Args&&... args);
+    template<class T, class... Args>
+    T make_shared(Args&&... args);
+    }
+    template <class T>
+    struct QSharedPointer {
+        template <class ...Args>
+        static T create(Args&&... args);
+    };
+    struct Foo {
+        Foo(int x, int y) {}
+        Foo(float x, float y) {}
+    };
+    int main() { 
+        std::make_shared<Foo>(1, ^);
+        std::make_unique<Foo>(1, ^);
+        QSharedPointer<Foo>::create(1, ^); 
+    }
+  )cpp");
+  for (auto Point : Code.points()) {
+    auto Results = signatures(Code.code(), Point);
+    EXPECT_THAT(Results.signatures,
+                ElementsAre(sig("Foo([[int x]], [[int y]])"),
+                            sig("Foo([[float x]], [[float y]])")));
+    EXPECT_EQ(0, Results.activeSignature);
+    EXPECT_EQ(1, Results.activeParameter);
+  }
+}
+
 TEST(SignatureHelpTest, Overloads) {
   auto Results = signatures(R"cpp(
     void foo(int x, int y);
