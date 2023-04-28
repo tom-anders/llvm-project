@@ -304,6 +304,15 @@ struct Fragment {
   };
   CompletionBlock Completion;
 
+  /// Describes signatue help preferences
+  struct SignatureHelpBlock {
+    /// Fully qualified names (omitting the `<T>`) of functions like
+    /// `std::make_shared<T>` or `std::vector<T>::emplace_back` where signature
+    /// help should show constructors of `T`
+    std::vector<Located<std::string>> ForwardingFunctions;
+  };
+  SignatureHelpBlock SignatureHelp;
+
   /// Describes hover preferences.
   struct HoverBlock {
     /// Whether hover show a.k.a type.

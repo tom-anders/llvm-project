@@ -6,6 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "ConfigFragment.h"
+#include "support/Logger.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
@@ -66,6 +67,7 @@ public:
     Dict.handle("Style", [&](Node &N) { parse(F.Style, N); });
     Dict.handle("Diagnostics", [&](Node &N) { parse(F.Diagnostics, N); });
     Dict.handle("Completion", [&](Node &N) { parse(F.Completion, N); });
+    Dict.handle("SignatureHelp", [&](Node &N) { parse(F.SignatureHelp, N); });
     Dict.handle("Hover", [&](Node &N) { parse(F.Hover, N); });
     Dict.handle("InlayHints", [&](Node &N) { parse(F.InlayHints, N); });
     Dict.parse(N);
@@ -225,6 +227,18 @@ private:
         F.AllScopes = *AllScopes;
     });
     Dict.parse(N);
+  }
+
+  void parse(Fragment::SignatureHelpBlock &F, Node &N) {
+    DictParser Dict("SignatureHelp", this);
+    elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG");
+    Dict.handle("ForwardingFunctions", [&](Node &N) {
+      elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG");
+      if (auto ForwardingFunctions = scalarValues(N))
+        F.ForwardingFunctions = std::move(*ForwardingFunctions);
+
+      elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG {0}", scalarValues(N).has_value());
+    });
   }
 
   void parse(Fragment::HoverBlock &F, Node &N) {

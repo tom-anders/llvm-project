@@ -194,6 +194,7 @@ struct FragmentCompiler {
     compile(std::move(F.Index));
     compile(std::move(F.Diagnostics));
     compile(std::move(F.Completion));
+    compile(std::move(F.SignatureHelp));
     compile(std::move(F.Hover));
     compile(std::move(F.InlayHints));
     compile(std::move(F.Style));
@@ -582,6 +583,19 @@ struct FragmentCompiler {
           [AllScopes(**F.AllScopes)](const Params &, Config &C) {
             C.Completion.AllScopes = AllScopes;
           });
+    }
+  }
+
+  void compile(Fragment::SignatureHelpBlock &&F) {
+    if (!F.ForwardingFunctions.empty()) {
+      std::vector<std::string> ForwardingFunctions;
+      for (auto &F : F.ForwardingFunctions)
+        ForwardingFunctions.push_back(std::move(*F));
+
+      Out.Apply.push_back([ForwardingFunctions(std::move(ForwardingFunctions))](
+                              const Params &, Config &C) {
+        C.SignatureHelp.ForwardingFunctions = ForwardingFunctions;
+      });
     }
   }
 

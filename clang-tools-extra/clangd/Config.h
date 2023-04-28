@@ -133,6 +133,11 @@ struct Config {
     bool AllScopes = true;
   } Completion;
 
+  struct {
+      /// Passed to Sema's `CodeCompleteOpts`
+      std::vector<std::string> ForwardingFunctions;
+  } SignatureHelp;
+
   /// Configures hover feature.
   struct {
     /// Whether hover show a.k.a type.
