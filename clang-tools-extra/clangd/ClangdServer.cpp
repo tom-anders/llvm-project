@@ -444,11 +444,16 @@ void ClangdServer::codeComplete(PathRef File, Position Pos,
 }
 
 void ClangdServer::signatureHelp(PathRef File, Position Pos,
-                                 MarkupKind DocumentationFormat,
+                                 const clangd::CodeCompleteOptions &Opts,
                                  Callback<SignatureHelp> CB) {
 
+  // Copy completion options for passing them to async task handler.
+  auto CodeCompleteOpts = Opts;
+  CodeCompleteOpts.ForwardingFunctions =
+      Config::current().SignatureHelp.ForwardingFunctions;
+
   auto Action = [Pos, File = File.str(), CB = std::move(CB),
-                 DocumentationFormat,
+                 CodeCompleteOpts = std::move(CodeCompleteOpts),
                  this](llvm::Expected<InputsAndPreamble> IP) mutable {
     if (!IP)
       return CB(IP.takeError());
@@ -464,7 +469,7 @@ void ClangdServer::signatureHelp(PathRef File, Position Pos,
       ParseInput.Contents.append("\n");
     ParseInput.Index = Index;
     CB(clangd::signatureHelp(File, Pos, *PreambleData, ParseInput,
-                             DocumentationFormat));
+                             std::move(CodeCompleteOpts)));
   };
 
   // Unlike code completion, we wait for a preamble here.

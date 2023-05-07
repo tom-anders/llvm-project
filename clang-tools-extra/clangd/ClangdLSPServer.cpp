@@ -1067,8 +1067,7 @@ void ClangdLSPServer::onCompletion(const CompletionParams &Params,
 
 void ClangdLSPServer::onSignatureHelp(const TextDocumentPositionParams &Params,
                                       Callback<SignatureHelp> Reply) {
-  Server->signatureHelp(Params.textDocument.uri.file(), Params.position,
-                        Opts.SignatureHelpDocumentationFormat,
+  Server->signatureHelp(Params.textDocument.uri.file(), Params.position, Opts.CodeComplete,
                         [Reply = std::move(Reply), this](
                             llvm::Expected<SignatureHelp> Signature) mutable {
                           if (!Signature)

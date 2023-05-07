@@ -594,7 +594,9 @@ struct FragmentCompiler {
 
       Out.Apply.push_back([ForwardingFunctions(std::move(ForwardingFunctions))](
                               const Params &, Config &C) {
-        C.SignatureHelp.ForwardingFunctions = ForwardingFunctions;
+        for (auto &F : ForwardingFunctions) {
+          C.SignatureHelp.ForwardingFunctions.push_back(std::move(F));
+        }
       });
     }
   }

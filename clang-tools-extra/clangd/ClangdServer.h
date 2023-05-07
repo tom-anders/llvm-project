@@ -234,7 +234,8 @@ public:
 
   /// Provide signature help for \p File at \p Pos.  This method should only be
   /// called for tracked files.
-  void signatureHelp(PathRef File, Position Pos, MarkupKind DocumentationFormat,
+  void signatureHelp(PathRef File, Position Pos,
+                     const clangd::CodeCompleteOptions& Opts,
                      Callback<SignatureHelp> CB);
 
   /// Find declaration/definition locations of symbol at a specified position.

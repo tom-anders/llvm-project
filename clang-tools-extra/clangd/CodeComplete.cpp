@@ -2183,7 +2183,7 @@ CodeCompleteResult codeComplete(PathRef FileName, Position Pos,
 SignatureHelp signatureHelp(PathRef FileName, Position Pos,
                             const PreambleData &Preamble,
                             const ParseInputs &ParseInput,
-                            MarkupKind DocumentationFormat) {
+                            CodeCompleteOptions Opts) {
   auto Offset = positionToOffset(ParseInput.Contents, Pos);
   if (!Offset) {
     elog("Signature help position was invalid {0}", Offset.takeError());
@@ -2195,9 +2195,10 @@ SignatureHelp signatureHelp(PathRef FileName, Position Pos,
   Options.IncludeMacros = false;
   Options.IncludeCodePatterns = false;
   Options.IncludeBriefComments = false;
+  Options.ForwardingFunctions = std::move(Opts.ForwardingFunctions);
   semaCodeComplete(
-      std::make_unique<SignatureHelpCollector>(Options, DocumentationFormat,
-                                               ParseInput.Index, Result),
+      std::make_unique<SignatureHelpCollector>(
+          Options, Opts.DocumentationFormat, ParseInput.Index, Result),
       Options,
       {FileName, *Offset, Preamble,
        PreamblePatch::createFullPatch(FileName, ParseInput, Preamble),

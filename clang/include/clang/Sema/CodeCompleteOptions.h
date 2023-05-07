@@ -9,6 +9,7 @@
 #ifndef LLVM_CLANG_SEMA_CODECOMPLETEOPTIONS_H
 #define LLVM_CLANG_SEMA_CODECOMPLETEOPTIONS_H
 
+#include <vector>
 namespace clang {
 
 /// Options controlling the behavior of code completion.
@@ -42,6 +43,11 @@ public:
   /// Include results after corrections (small fix-its), e.g. change '.' to '->'
   /// on member access, etc.
   unsigned IncludeFixIts : 1;
+
+  /// Fully qualified names (omitting the `<T>`) of functions like
+  /// `std::make_shared<T>` or `std::vector<T>::emplace_back` where signature
+  /// help should show constructors of `T`
+  std::vector<std::string> ForwardingFunctions;
 
   CodeCompleteOptions()
       : IncludeMacros(0), IncludeCodePatterns(0), IncludeGlobals(1),

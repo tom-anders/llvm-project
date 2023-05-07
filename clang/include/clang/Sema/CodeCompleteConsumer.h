@@ -1187,6 +1187,13 @@ public:
     return CodeCompleteOpts.LoadExternal;
   }
 
+  /// Functions like std::make_shared<T> where e.g. signature help should
+  /// show T's constructor(s)
+  const std::vector<std::string> &ForwardingFunctions() const {
+    llvm::SmallVector<std::string> vec;
+    return CodeCompleteOpts.ForwardingFunctions;
+  }
+
   /// Deregisters and destroys this code-completion consumer.
   virtual ~CodeCompleteConsumer();
 

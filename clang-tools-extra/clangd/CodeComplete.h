@@ -107,6 +107,9 @@ struct CodeCompleteOptions {
   /// Such completions can insert scope qualifiers.
   bool AllScopes = false;
 
+  /// Passed to Sema's `CodeCompleteOpts`
+  std::vector<std::string> ForwardingFunctions;
+
   /// Whether to use the clang parser, or fallback to text-based completion
   /// (using identifiers in the current file and symbol indexes).
   enum CodeCompletionParse {
@@ -292,7 +295,7 @@ CodeCompleteResult codeComplete(PathRef FileName, Position Pos,
 SignatureHelp signatureHelp(PathRef FileName, Position Pos,
                             const PreambleData &Preamble,
                             const ParseInputs &ParseInput,
-                            MarkupKind DocumentationFormat);
+                            CodeCompleteOptions Opts);
 
 // For index-based completion, we only consider:
 //   * symbols in namespaces or translation unit scopes (e.g. no class

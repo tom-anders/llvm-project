@@ -57,6 +57,8 @@
 #include <list>
 #include <map>
 #include <optional>
+// TODO remove
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -6108,12 +6110,14 @@ QualType Sema::ProduceCallSignatureHelp(Expr *Fn, ArrayRef<Expr *> Args,
     if (ULE->getNumDecls() > 0) {
       std::string QualifiedName;
       llvm::raw_string_ostream OS(QualifiedName);
+      const auto& ForwardingFunctions = CodeCompleter->ForwardingFunctions();
       if (const auto *NC = ULE->getNamingClass()) {
         NC->printQualifiedName(OS);
         OS << "::";
         ULE->decls().begin()->printName(OS);
 
-        if (QualifiedName == "QSharedPointer::create") {
+        // TODO move if outside
+        if (llvm::find(ForwardingFunctions, QualifiedName) != ForwardingFunctions.end()) {
           if (const auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(
                   ULE->getNamingClass())) {
             const auto &TemplateArgs = CTSD->getTemplateArgs();
@@ -6126,8 +6130,10 @@ QualType Sema::ProduceCallSignatureHelp(Expr *Fn, ArrayRef<Expr *> Args,
         }
       } else {
         ULE->decls().begin()->printQualifiedName(OS);
-        if (QualifiedName == "std::make_unique" ||
-            QualifiedName == "std::make_shared") {
+        for (auto F : ForwardingFunctions) {
+            std::cerr << "F =" << F << std::endl;
+        }
+        if (llvm::find(ForwardingFunctions, QualifiedName) != ForwardingFunctions.end()) {
           if (ULE->getNumTemplateArgs() == 1) {
             return ProduceConstructorSignatureHelp(
                 ULE->template_arguments().front().getArgument().getAsType(), OpenParLoc,

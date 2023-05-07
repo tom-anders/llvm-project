@@ -231,14 +231,11 @@ private:
 
   void parse(Fragment::SignatureHelpBlock &F, Node &N) {
     DictParser Dict("SignatureHelp", this);
-    elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG");
     Dict.handle("ForwardingFunctions", [&](Node &N) {
-      elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG");
       if (auto ForwardingFunctions = scalarValues(N))
         F.ForwardingFunctions = std::move(*ForwardingFunctions);
-
-      elog("PARSINGGGGGGGGGGGGGGGGGGGGGGGGGG {0}", scalarValues(N).has_value());
     });
+    Dict.parse(N);
   }
 
   void parse(Fragment::HoverBlock &F, Node &N) {
